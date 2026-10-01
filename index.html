@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>¿Qué quieren para el viernes 9 de octubre?</title>
+    <!-- Tailwind CSS for modern responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+
+        @keyframes fall {
+            0% {
+                transform: translateY(-100px) rotate(0deg);
+                opacity: 0.7;
+            }
+            50% {
+                opacity: 0.95;
+            }
+            100% {
+                transform: translateY(105vh) rotate(360deg);
+                opacity: 0.7;
+            }
+        }
+
+        .bg-square {
+            position: absolute;
+            animation: fall linear infinite;
+            pointer-events: none;
+            border-radius: 8px;
+        }
+
+        /* Custom glassmorphism card */
+        .glass-card {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.75);
+        }
+    </style>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, increment } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase handles
+        window.initializeApp = initializeApp;
+        window.getAuth = getAuth;
+        window.signInAnonymously = signInAnonymously;
+        window.signInWithCustomToken = signInWithCustomToken;
+        window.getFirestore = getFirestore;
+        window.doc = doc;
+        window.getDoc = getDoc;
+        window.setDoc = setDoc;
+        window.updateDoc = updateDoc;
+        window.onSnapshot = onSnapshot;
+        window.increment = increment;
+
+        window.appId = typeof __app_id !== 'undefined' ? __app_id : 'encuesta-viernes-9-octubre-default';
+        window.firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "mock", projectId: "mock" };
+        window.initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    </script>
+</head>
+<body class="bg-slate-950 min-h-screen flex items-center justify-center p-4 relative text-slate-100">
+
+    <!-- Admin Reset Button Top Left Corner -->
+    <div class="absolute top-4 left-4 z-30">
+        <button onclick="openAdminModal()" class="w-10 h-10 rounded-xl bg-slate-900/90 border border-slate-700/80 hover:border-blue-500/50 flex items-center justify-center text-slate-300 hover:text-white transition-all shadow-lg shadow-black/40 cursor-pointer" title="Panel de Administrador">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Admin Password Modal Dialog -->
+    <div id="admin-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm hidden transition-all duration-300">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-xs shadow-2xl relative scale-95 transition-all duration-300" id="admin-modal-content">
+            <h3 class="text-sm font-bold text-white mb-2 flex items-center gap-2">
+                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+                Acceso de Administrador
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Ingresa la contraseña para reiniciar la encuesta desde cero.</p>
+            <input type="password" id="admin-password-input" placeholder="Contraseña..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 mb-4">
+            <div class="flex gap-2">
+                <button onclick="closeAdminModal()" class="flex-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer">Cancelar</button>
+                <button onclick="verifyAdminPassword()" class="flex-1 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-all cursor-pointer shadow-md shadow-blue-600/30">Reiniciar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Infinite Falling Solid White and Blue Background Squares Container -->
+    <div id="background-animation" class="absolute inset-0 overflow-hidden z-0"></div>
+
+    <!-- Toast Notification Popup -->
+    <div id="toast-message" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 hidden bg-slate-900 border border-emerald-500/50 text-slate-100 px-5 py-3 rounded-xl shadow-2xl transition-all duration-300 scale-95 opacity-0 text-sm font-medium"></div>
+
+    <!-- Main Compact Encuesta Card Container -->
+    <div class="relative z-10 w-full max-w-sm glass-card rounded-2xl p-5 sm:p-6 transition-all duration-300">
+        
+        <!-- Header & Countdown Timer -->
+        <div class="text-center mb-5">
+            <div class="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/40 px-3 py-1 rounded-full text-blue-400 text-xs font-semibold mb-3 shadow-sm">
+                <svg class="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>Cierra en: <strong id="timer-display" class="font-mono tracking-wider">--:--:--</strong></span>
+            </div>
+
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight text-white leading-snug">
+                ¿Qué quieren para el viernes 9 de octubre?
+            </h1>
+            <p class="text-xs text-slate-400 mt-1">Elige tu opción favorita. ¡Solo 1 voto por persona!</p>
+        </div>
+
+        <!-- Options Form List -->
+        <div class="space-y-3 mb-5">
+            
+            <!-- Option 1 -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 hover:border-blue-500/50 transition-all duration-200 group">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                        <span class="text-xs sm:text-sm font-medium text-slate-200">El pase booyaah</span>
+                    </div>
+                    <button id="btn-1" onclick="handleVote(1)" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/30 shrink-0 cursor-pointer">
+                        Votar
+                    </button>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-1" class="bg-gradient-to-r from-blue-600 to-sky-400 h-full w-0 transition-all duration-500 rounded-full"></div>
+                </div>
+                <div class="flex justify-between items-center mt-1 text-[11px] text-slate-400">
+                    <span id="votes-1">0 votos (0%)</span>
+                </div>
+            </div>
+
+            <!-- Option 2 -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 hover:border-blue-500/50 transition-all duration-200 group">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                        <span class="text-xs sm:text-sm font-medium text-slate-200">Un emote</span>
+                    </div>
+                    <button id="btn-2" onclick="handleVote(2)" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/30 shrink-0 cursor-pointer">
+                        Votar
+                    </button>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-2" class="bg-gradient-to-r from-blue-600 to-sky-400 h-full w-0 transition-all duration-500 rounded-full"></div>
+                </div>
+                <div class="flex justify-between items-center mt-1 text-[11px] text-slate-400">
+                    <span id="votes-2">0 votos (0%)</span>
+                </div>
+            </div>
+
+            <!-- Option 3 -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 hover:border-blue-500/50 transition-all duration-200 group">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">3</span>
+                        <span class="text-xs sm:text-sm font-medium text-slate-200">Un traje u objeto (máx. 500 diamantes)</span>
+                    </div>
+                    <button id="btn-3" onclick="handleVote(3)" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/30 shrink-0 cursor-pointer">
+                        Votar
+                    </button>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div id="bar-3" class="bg-gradient-to-r from-blue-600 to-sky-400 h-full w-0 transition-all duration-500 rounded-full"></div>
+                </div>
+                <div class="flex justify-between items-center mt-1 text-[11px] text-slate-400">
+                    <span id="votes-3">0 votos (0%)</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer Stats & Status -->
+        <div class="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs mb-3">
+            <span id="total-votes" class="text-slate-400 font-medium">Total de votos: 0</span>
+            <span id="user-status" class="text-blue-400 font-medium">Participa ahora</span>
+        </div>
+
+        <!-- Restriction Notice -->
+        <div class="bg-rose-950/40 border border-rose-500/30 rounded-xl p-2.5 text-center">
+            <p class="text-[11px] font-medium text-rose-300 leading-relaxed">
+                🚫 (No se pueden pedir diamantes o trajes exclusivos como Ej: Naruto/Sasuke/Kakashi)
+            </p>
+        </div>
+
+    </div>
+
+    <!-- Script Logic -->
+    <script>
+        let hasVoted = false;
+        let userVotedOption = null;
+        let isTimerExpired = false;
+        let db = null;
+        let auth = null;
+        let globalTimerDocRef = null;
+
+        // Admin Modal Controls
+        window.openAdminModal = function() {
+            const modal = document.getElementById('admin-modal');
+            const content = document.getElementById('admin-modal-content');
+            document.getElementById('admin-password-input').value = '';
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95');
+                content.classList.add('scale-100');
+            }, 10);
+        }
+
+        window.closeAdminModal = function() {
+            const modal = document.getElementById('admin-modal');
+            const content = document.getElementById('admin-modal-content');
+            content.classList.remove('scale-100');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        window.verifyAdminPassword = async function() {
+            const pass = document.getElementById('admin-password-input').value;
+            if (pass === '012807') {
+                closeAdminModal();
+                showToast("¡Contraseña correcta! Reiniciando encuesta...");
+                
+                // Reset local state
+                localStorage.removeItem(`voted_${window.appId}`);
+                hasVoted = false;
+                userVotedOption = null;
+                isTimerExpired = false;
+
+                // Reset Firestore / Fallback data
+                const newAnchor = Date.now();
+                const resetData = { opt1: 0, opt2: 0, opt3: 0, timerAnchor: newAnchor };
+
+                try {
+                    if (db && auth.currentUser && globalTimerDocRef) {
+                        await setDoc(globalTimerDocRef, resetData);
+                    }
+                } catch (e) {
+                    console.error("Firestore reset error:", e);
+                }
+
+                // Reset local fallback data
+                localStorage.setItem('encuesta_local_counts_v3', JSON.stringify({opt1:0, opt2:0, opt3:0}));
+                localStorage.setItem('encuesta_offline_timer_v3', newAnchor);
+                
+                // Reset UI buttons
+                for (let i = 1; i <= 3; i++) {
+                    const btn = document.getElementById(`btn-${i}`);
+                    btn.textContent = "Votar";
+                    btn.className = "px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-all shadow-md shadow-blue-600/30 shrink-0 cursor-pointer";
+                    btn.disabled = false;
+                }
+                document.getElementById('user-status').textContent = "Participa ahora";
+                document.getElementById('user-status').className = "text-blue-400 font-medium";
+
+                updateUIStats(0, 0, 0);
+            } else {
+                showToast("Contraseña incorrecta. Inténtalo de nuevo.");
+            }
+        }
+
+        // Infinite falling solid white and blue blocks generator
+        function initBackgroundAnimation() {
+            const container = document.getElementById('background-animation');
+            const count = 45;
+            for (let i = 0; i < count; i++) {
+                const square = document.createElement('div');
+                square.className = 'bg-square';
+                
+                const size = Math.floor(Math.random() * 26) + 12; // 12px to 38px
+                const left = Math.random() * 100;
+                const duration = Math.random() * 6 + 5; // 5s to 11s
+                const delay = Math.random() * -11;
+                
+                const styleType = Math.random();
+                square.style.width = `${size}px`;
+                square.style.height = `${size}px`;
+                square.style.left = `${left}%`;
+                square.style.animationDuration = `${duration}s`;
+                square.style.animationDelay = `${delay}s`;
+                
+                // Solid white and solid blue color styling without borders
+                if (styleType > 0.65) {
+                    square.style.background = '#FFFFFF';
+                    square.style.boxShadow = '0 0 12px rgba(255, 255, 255, 0.75)';
+                } else if (styleType > 0.35) {
+                    square.style.background = '#2563EB';
+                    square.style.boxShadow = '0 0 12px rgba(37, 99, 235, 0.85)';
+                } else {
+                    square.style.background = '#60A5FA';
+                    square.style.boxShadow = '0 0 12px rgba(96, 165, 250, 0.85)';
+                }
+                
+                container.appendChild(square);
+            }
+        }
+
+        // Persistent 24-Hour Continuous Countdown Timer synced via Firestore/Cloud + Local fallback
+        function initTimer(timerDocRef) {
+            const timerDisplay = document.getElementById('timer-display');
+            const DURATION_24H = 24 * 60 * 60 * 1000; // 24 hours in ms
+
+            let anchorTime = null;
+
+            onSnapshot(timerDocRef, (docSnap) => {
+                if (docSnap.exists() && docSnap.data().timerAnchor) {
+                    anchorTime = docSnap.data().timerAnchor;
+                    if (isTimerExpired && (Date.now() - anchorTime < DURATION_24H)) {
+                        isTimerExpired = false;
+                        location.reload(); // Refresh to restore voting if timer was reset
+                    }
+                } else {
+                    anchorTime = Date.now();
+                    setDoc(timerDocRef, { timerAnchor: anchorTime }, { merge: true }).catch(() => {});
+                }
+            }, () => {
+                const LOCAL_ANCHOR_KEY = 'encuesta_persistent_timer_anchor_v3';
+                anchorTime = localStorage.getItem(LOCAL_ANCHOR_KEY);
+                if (!anchorTime) {
+                    anchorTime = Date.now();
+                    localStorage.setItem(LOCAL_ANCHOR_KEY, anchorTime);
+                } else {
+                    anchorTime = parseInt(anchorTime, 10);
+                }
+            });
+
+            function updateClock() {
+                if (!anchorTime) return;
+                const now = Date.now();
+                const elapsed = now - anchorTime;
+                let remaining = DURATION_24H - (elapsed % DURATION_24H);
+
+                if (elapsed >= DURATION_24H || remaining <= 0) {
+                    remaining = 0;
+                    if (!isTimerExpired) {
+                        isTimerExpired = true;
+                        lockVotingUIPerminant();
+                    }
+                }
+
+                const hours = Math.floor((remaining / (1000 * 60 * 60)) % 24);
+                const minutes = Math.floor((remaining / 1000 / 60) % 60);
+                const seconds = Math.floor((remaining / 1000) % 60);
+
+                timerDisplay.textContent = 
+                    String(hours).padStart(2, '0') + ':' +
+                    String(minutes).padStart(2, '0') + ':' +
+                    String(seconds).padStart(2, '0');
+            }
+
+            setInterval(updateClock, 1000);
+            updateClock();
+        }
+
+        // Toast Notification helper
+        window.showToast = function(message) {
+            const toast = document.getElementById('toast-message');
+            toast.textContent = message;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.remove('scale-95', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 300);
+            }, 3500);
+        }
+
+        // Initialize Firebase connection & Sync Realtime Data
+        async function initFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                if (window.initialAuthToken) {
+                    await signInWithCustomToken(auth, window.initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                // Check if user already voted locally
+                const localVote = localStorage.getItem(`voted_${window.appId}`);
+                if (localVote) {
+                    hasVoted = true;
+                    userVotedOption = parseInt(localVote, 10);
+                    lockVotingUI(userVotedOption);
+                }
+
+                const docRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'poll_results_v3');
+                globalTimerDocRef = docRef;
+                initTimer(docRef);
+
+                onSnapshot(docRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        updateUIStats(data.opt1 || 0, data.opt2 || 0, data.opt3 || 0);
+                    } else {
+                        setDoc(docRef, { opt1: 0, opt2: 0, opt3: 0, timerAnchor: Date.now() }).catch(console.error);
+                    }
+                }, (error) => {
+                    console.error("Snapshot error:", error);
+                });
+            } catch (err) {
+                console.error("Firebase initialization error, using local fallback mode:", err);
+                setupLocalFallback();
+            }
+        }
+
+        // Handle Voting Action
+        window.handleVote = async function(optionNum) {
+            if (isTimerExpired) {
+                showToast("La encuesta ha finalizado. Ya no se pueden emitir votos.");
+                return;
+            }
+
+            if (hasVoted) {
+                showToast("Ya has registrado tu voto anteriormente. Solo se permite 1 voto por persona.");
+                return;
+            }
+
+            hasVoted = true;
+            userVotedOption = optionNum;
+            localStorage.setItem(`voted_${window.appId}`, optionNum);
+            lockVotingUI(optionNum);
+
+            showToast("¡Voto registrado con éxito! Gracias por participar.");
+
+            try {
+                if (db && auth.currentUser) {
+                    const docRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'poll_results_v3');
+                    const fieldName = `opt${optionNum}`;
+                    await updateDoc(docRef, {
+                        [fieldName]: increment(1)
+                    });
+                }
+            } catch (e) {
+                console.error("Error updating vote in Firestore, updating locally:", e);
+                incrementLocalVote(optionNum);
+            }
+        }
+
+        function lockVotingUI(selectedOption) {
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.getElementById(`btn-${i}`);
+                if (i === selectedOption) {
+                    btn.textContent = "✓ Tu Voto";
+                    btn.className = "px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-semibold text-xs shadow-md shadow-emerald-600/35 shrink-0 cursor-default";
+                } else {
+                    btn.textContent = "Votado";
+                    btn.className = "px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 font-semibold text-xs shrink-0 cursor-not-allowed opacity-60";
+                    btn.disabled = true;
+                }
+            }
+            document.getElementById('user-status').textContent = "Has votado";
+            document.getElementById('user-status').className = "text-emerald-400 font-medium";
+        }
+
+        function lockVotingUIPerminant() {
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.getElementById(`btn-${i}`);
+                btn.textContent = "Finalizado";
+                btn.className = "px-3 py-1.5 rounded-lg bg-slate-800 text-slate-500 font-semibold text-xs shrink-0 cursor-not-allowed opacity-60";
+                btn.disabled = true;
+            }
+            document.getElementById('user-status').textContent = "Encuesta cerrada";
+            document.getElementById('user-status').className = "text-rose-400 font-medium";
+        }
+
+        function updateUIStats(v1, v2, v3) {
+            const total = v1 + v2 + v3;
+            document.getElementById('total-votes').textContent = `Total de votos: ${total}`;
+
+            const counts = [v1, v2, v3];
+            for (let i = 1; i <= 3; i++) {
+                const votes = counts[i - 1];
+                const percentage = total > 0 ? Math.round((votes / total) * 100) : 0;
+                
+                document.getElementById(`votes-${i}`).textContent = `${votes} votos (${percentage}%)`;
+                document.getElementById(`bar-${i}`).style.width = `${percentage}%`;
+            }
+        }
+
+        function setupLocalFallback() {
+            const FALLBACK_KEY = 'encuesta_local_counts_v3';
+            let data = JSON.parse(localStorage.getItem(FALLBACK_KEY) || '{"opt1":0,"opt2":0,"opt3":0}');
+            updateUIStats(data.opt1, data.opt2, data.opt3);
+
+            const timerDisplay = document.getElementById('timer-display');
+            let startTime = localStorage.getItem('encuesta_offline_timer_v3') || Date.now();
+            localStorage.setItem('encuesta_offline_timer_v3', startTime);
+            
+            setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                let remaining = (24 * 60 * 60 * 1000) - (elapsed % (24 * 60 * 60 * 1000));
+                
+                if (elapsed >= (24 * 60 * 60 * 1000)) {
+                    remaining = 0;
+                    if (!isTimerExpired) {
+                        isTimerExpired = true;
+                        lockVotingUIPerminant();
+                    }
+                }
+
+                const h = Math.floor((remaining / (1000 * 60 * 60)) % 24);
+                const m = Math.floor((remaining / 1000 / 60) % 60);
+                const s = Math.floor((remaining / 1000) % 60);
+                timerDisplay.textContent = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+            }, 1000);
+
+            window.handleVote = function(optionNum) {
+                if (isTimerExpired) {
+                    showToast("La encuesta ha finalizado.");
+                    return;
+                }
+                if (hasVoted) {
+                    showToast("Ya has registrado tu voto anteriormente.");
+                    return;
+                }
+                hasVoted = true;
+                localStorage.setItem(`voted_${window.appId}`, optionNum);
+                lockVotingUI(optionNum);
+
+                data[`opt${optionNum}`]++;
+                localStorage.setItem(FALLBACK_KEY, JSON.stringify(data));
+                updateUIStats(data.opt1, data.opt2, data.opt3);
+                showToast("¡Voto registrado con éxito!");
+            }
+        }
+
+        window.onload = function() {
+            initBackgroundAnimation();
+            initFirebase();
+        };
+    </script>
+</body>
+</html>
